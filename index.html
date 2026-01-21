@@ -786,7 +786,7 @@
             } catch (error) {
                 console.error(error);
                 alert("שגיאה בתקשורת");
-  finally {
+            } finally {
                 btn.innerHTML = originalText;
             }
         }
@@ -810,7 +810,7 @@
             
             const plan = snap.docs[0].data();
             document.getElementById('ai-response-text').innerHTML = plan.html;
-            documtElementById('ai-response-container').classList.remove('hidden');
+            document.getElementById('ai-response-container').classList.remove('hidden');
         }
 
         function closeAIResult() {
@@ -824,7 +824,7 @@
                 return "Error: No API Key";
             }
             
-         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
             const payload = { contents: [{ parts: [{ text: prompt }] }] };
             const response = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
             const data = await response.json();
