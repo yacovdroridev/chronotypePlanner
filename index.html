@@ -354,6 +354,7 @@
         let currentResultType = 'bear'; 
         let unsubscribeTasks = null; // Listener cleanup
         let appId = "default-app-id";
+        let firebaseInitTimeout = null;
 
         // --- GITHUB / PUBLIC WEB CONFIGURATION ---
         // Instructions:
@@ -402,8 +403,17 @@
 
         // --- FIREBASE INIT ---
         async function initFirebase() {
+            firebaseInitTimeout = setTimeout(() => {
+                if (!auth || !db) {
+                    console.error("Firebase init timed out.");
+                    document.getElementById('screen-loading').classList.add('hidden');
+                    showScreen('screen-login');
+                    alert("לא ניתן להתחבר ל-Firebase. ודא שהפעלת Anonymous Auth והגדרות הפרויקט תקינות.");
+                }
+            }, 8000);
+
             if (window.firebaseModules) { runFirebaseLogic(); } 
-            else { window.addEventListener('firebase-ready', runFirebaseLogic); }
+            else { window.addEventListener('firebase-ready', runFirebaseLogic, { once: true }); }
         }
 
         async function runFirebaseLogic() {
@@ -419,18 +429,28 @@
                 return;
             }
 
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
 
-            // Handle Auth (Preview vs Public)
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                 await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                 await signInAnonymously(auth);
+                // Handle Auth (Preview vs Public)
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                     await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                     await signInAnonymously(auth);
+                }
+            } catch (e) {
+                console.error("Firebase init error:", e);
+                if (firebaseInitTimeout) clearTimeout(firebaseInitTimeout);
+                document.getElementById('screen-loading').classList.add('hidden');
+                showScreen('screen-login');
+                alert("שגיאת התחברות ל-Firebase. ודא שהפעלת Anonymous Auth ושכל המפתחות נכונים.");
+                return;
             }
 
             onAuthStateChanged(auth, async (user) => {
+                if (firebaseInitTimeout) clearTimeout(firebaseInitTimeout);
                 if (user) {
                     currentUser = user;
                     
@@ -714,7 +734,11 @@
         // --- PLANNER LOGIC ---
 
         async function generateSchedule(timeframe) {
-            const btnId = timeframe === 'today' ? 'btn-gen-today' : imeframe === 'tomorrow' ? 'btn-gen-tomorrow' : 'btn-gen-week');
+            const btnId = timeframe === 'today'
+                ? 'btn-gen-today'
+                : timeframe === 'tomorrow'
+                    ? 'btn-gen-tomorrow'
+                    : 'btn-gen-week';
             const btn = document.getElementById(btnId);
             const originalText = btn.innerHTML;
             btn.innerHTML = `<span class="loading-dots">..</span>`;
