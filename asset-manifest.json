@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/chronotypePlanner/static/css/main.64dbb020.css",
+    "main.js": "/chronotypePlanner/static/js/main.3e0f007f.js",
+    "index.html": "/chronotypePlanner/index.html",
+    "main.64dbb020.css.map": "/chronotypePlanner/static/css/main.64dbb020.css.map",
+    "main.3e0f007f.js.map": "/chronotypePlanner/static/js/main.3e0f007f.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.64dbb020.css",
+    "static/js/main.3e0f007f.js"
+  ]
+}
