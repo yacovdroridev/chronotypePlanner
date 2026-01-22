@@ -1,77 +1,19 @@
-import { initializeApp } from 'firebase/app';
-import {
-  getAuth,
-  signInAnonymously,
-  signInWithCustomToken,
-  onAuthStateChanged,
-  signOut,
-} from 'firebase/auth';
-import {
-  getFirestore,
-  doc,
-  setDoc,
-  getDoc,
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  serverTimestamp,
-  limit,
-  where,
-  getDocs,
-} from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
 import { marked } from 'marked';
+
+const supabaseUrl = 'https://mtbwpweisvrvpwckkwaq.supabase.co';
+const supabaseAnonKey = 'sb_publishable_oLyhvM3VOylqTHR3iAuMwg_E183UkPx';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // --- CONSTANTS & STATE ---
 let apiKey = '';
-let firebaseConfig = null;
-let db;
-let auth;
-let userDocRef;
-let tasksColRef;
-let plansColRef;
+let userId = null;
 let userData = null;
 let answerHistory = [];
 let currentMode = 'base';
 let currentResultType = 'bear';
-let unsubscribeTasks = null; // Listener cleanup
-let appId = 'default-app-id';
-let firebaseInitTimeout = null;
+let tasksChannel = null;
 let appInitialized = false;
-let firebaseReady = false;
-
-// --- GITHUB / PUBLIC WEB CONFIGURATION ---
-// 1. If you are uploading this to GitHub, replace the Empty Strings below with your keys.
-// 2. You can get firebaseConfig from the Firebase Console (Settings -> General -> Your Apps).
-// 3. You can get Gemini apiKey from aistudio.google.com.
-
-// CHECK IF WE ARE IN THE CANVAS/PREVIEW ENVIRONMENT
-const injectedConfig = typeof window !== 'undefined' ? window.__firebase_config : undefined;
-const injectedAppId = typeof window !== 'undefined' ? window.__app_id : undefined;
-const injectedAuthToken = typeof window !== 'undefined' ? window.__initial_auth_token : undefined;
-
-if (injectedConfig) {
-  // WE ARE IN PREVIEW: Use injected keys
-  firebaseConfig = JSON.parse(injectedConfig);
-  // apiKey is injected by the environment usually, but we check just in case
-  if (injectedAppId) appId = injectedAppId;
-} else {
-  // WE ARE ON GITHUB/PUBLIC: Use your keys here
-  apiKey = '';
-
-  firebaseConfig = {
-    apiKey: 'AIzaSyBhcRBB9vzzAUdodqPxFsH0jZ6D4AAQ4J8',
-    authDomain: 'chrontypeplanner.firebaseapp.com',
-    projectId: 'chrontypeplanner',
-    storageBucket: 'chrontypeplanner.firebasestorage.app',
-    messagingSenderId: '273674506551',
-    appId: '1:273674506551:web:d4eb0d667a397b5c788ab2',
-    measurementId: 'G-P37L6Q61KE',
-  };
-}
 
 const baseData = {
   lion: { title: 'אריה 🦁', name: 'אריה', desc: 'משכימי קום, חדים בבוקר.', power: 'עבודה עמוקה בבוקר.', class: 'bg-lion' },
@@ -87,82 +29,46 @@ const statusData = {
   dolphin: { title: 'מצב דולפין (הצפה) 🐬', desc: 'עומס ופיזור.', power: 'עצור! תרגיל נשימה.', class: 'bg-dolphin' },
 };
 
-// --- FIREBASE INIT ---
-async function initFirebase() {
-  firebaseInitTimeout = setTimeout(() => {
-    if (!auth || !db) {
-      console.error('Firebase init timed out.');
-      document.getElementById('screen-loading').classList.add('hidden');
-      showScreen('screen-login');
-      alert('לא ניתן להתחבר ל-Firebase. ודא שהפעלת Anonymous Auth והגדרות הפרויקט תקינות.');
-    }
-  }, 8000);
+// --- SUPABASE INIT ---
+async function initSupabase() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  await handleSession(sessionData?.session || null);
 
-  await runFirebaseLogic();
+  supabase.auth.onAuthStateChange(async (_event, session) => {
+    await handleSession(session);
+  });
 }
 
-async function runFirebaseLogic() {
-  // Safety check for config
-  if (!firebaseConfig || !firebaseConfig.apiKey) {
-    console.warn('No Firebase Config found. If you are on GitHub, please edit your config.');
-    if (!injectedConfig) {
-      alert('שים לב: לא הוגדרו מפתחות Firebase. האפליקציה לא תשמור נתונים. נא לערוך את הקובץ ולהוסיף מפתחות.');
-    }
-    return;
-  }
-
-  try {
-    const app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-
-    // Handle Auth (Preview vs Public)
-    if (injectedAuthToken) {
-      await signInWithCustomToken(auth, injectedAuthToken);
-    } else {
-      await signInAnonymously(auth);
-    }
-  } catch (e) {
-    console.error('Firebase init error:', e);
-    if (firebaseInitTimeout) clearTimeout(firebaseInitTimeout);
-    document.getElementById('screen-loading').classList.add('hidden');
+async function handleSession(session) {
+  if (!session?.user) {
+    userId = null;
     showScreen('screen-login');
-    alert('שגיאת התחברות ל-Firebase. ודא שהפעלת Anonymous Auth ושכל המפתחות נכונים.');
+    document.getElementById('screen-loading').classList.add('hidden');
     return;
   }
 
-  onAuthStateChanged(auth, async (user) => {
-    if (firebaseInitTimeout) clearTimeout(firebaseInitTimeout);
-    if (user) {
-      // Refs
-      userDocRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main');
-      tasksColRef = collection(db, 'artifacts', appId, 'users', user.uid, 'tasks');
-      plansColRef = collection(db, 'artifacts', appId, 'users', user.uid, 'plans');
-      firebaseReady = true;
-
-      await checkUserProfile();
-    } else {
-      // Logged out
-      showScreen('screen-login');
-      document.getElementById('screen-loading').classList.add('hidden');
-    }
-  });
+  userId = session.user.id;
+  await checkUserProfile();
 }
 
 async function checkUserProfile() {
   try {
-    const docSnap = await getDoc(userDocRef);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('name, base_chronotype')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+
     document.getElementById('screen-loading').classList.add('hidden');
 
-    if (docSnap.exists()) {
-      userData = docSnap.data();
-      if (userData.name && userData.baseChronotype) {
-        showHub(userData);
-      } else if (userData.name) {
-        showIntroQuiz(userData.name);
-      } else {
-        showScreen('screen-login');
-      }
+    if (data?.name && data?.base_chronotype) {
+      userData = { name: data.name, baseChronotype: data.base_chronotype };
+      showHub(userData);
+    } else if (data?.name) {
+      userData = { name: data.name };
+      showIntroQuiz(data.name);
     } else {
       showScreen('screen-login');
     }
@@ -173,27 +79,68 @@ async function checkUserProfile() {
 }
 
 async function handleLogin() {
-  if (!firebaseReady || !userDocRef) {
-    alert('ההתחברות עדיין בתהליך. נסה שוב בעוד רגע.');
+  const name = document.getElementById('username-input').value.trim();
+  const email = document.getElementById('email-input').value.trim();
+  const password = document.getElementById('password-input').value;
+
+  if (!name || !email || !password) {
+    alert('נא להזין שם, אימייל וסיסמה');
     return;
   }
-  const name = document.getElementById('username-input').value.trim();
-  if (!name) return alert('נא להזין שם');
-  await setDoc(userDocRef, { name }, { merge: true });
-  if (userData && userData.baseChronotype) showHub({ ...userData, name });
-  else showIntroQuiz(name);
+
+  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (signInError) {
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (signUpError) {
+      alert(signUpError.message);
+      return;
+    }
+
+    if (!signUpData?.session) {
+      alert('נשלחה הודעת אימות לאימייל. אשר אותה ואז התחבר.');
+      return;
+    }
+  }
+
+  const session = signInData?.session || (await supabase.auth.getSession()).data.session;
+  if (!session?.user) {
+    alert('התחברות נכשלה. נסה שוב.');
+    return;
+  }
+
+  userId = session.user.id;
+  await supabase.from('profiles').upsert(
+    { id: userId, name },
+    { onConflict: 'id' }
+  );
+
+  await checkUserProfile();
 }
 
 async function handleLogout() {
   if (window.confirm('האם אתה בטוח שברצונך להתנתק? המידע המקומי ינוקה.')) {
-    if (unsubscribeTasks) unsubscribeTasks(); // Detach listener
-    await signOut(auth);
+    if (tasksChannel) {
+      await supabase.removeChannel(tasksChannel);
+      tasksChannel = null;
+    }
+    await supabase.auth.signOut();
     window.location.reload();
   }
 }
 
 async function saveUserBaseType(type) {
-  await setDoc(userDocRef, { baseChronotype: type }, { merge: true });
+  await supabase.from('profiles').upsert(
+    { id: userId, base_chronotype: type },
+    { onConflict: 'id' }
+  );
   userData = { ...userData, baseChronotype: type };
 }
 
@@ -209,9 +156,7 @@ function showHub(data) {
     document.getElementById('hub-animal-icon').innerText = info.title.split(' ')[1];
   }
 
-  // Start listening to tasks stats
   subscribeToTasks(true);
-
   showScreen('screen-welcome');
   updateProgress(0);
 }
@@ -338,34 +283,55 @@ function renderResult(type, data) {
   document.getElementById('add-task-form').classList.add('hidden');
   document.getElementById('ai-response-container').classList.add('hidden');
 
-  // Switch to tasks listener for full view
   subscribeToTasks(false);
-
   showScreen('screen-result');
 }
 
-// --- TASKS LOGIC (FIRESTORE) ---
-function subscribeToTasks(statsOnly) {
-  if (unsubscribeTasks) unsubscribeTasks();
+// --- TASKS LOGIC (SUPABASE) ---
+async function refreshTasks(statsOnly) {
+  if (!userId) return;
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
 
-  const q = query(tasksColRef, orderBy('createdAt', 'desc'));
+  if (error) {
+    console.error('Tasks Error:', error);
+    return;
+  }
 
-  unsubscribeTasks = onSnapshot(q, (snapshot) => {
-    const tasks = [];
-    let doneCount = 0;
-    snapshot.forEach((docSnap) => {
-      const t = { id: docSnap.id, ...docSnap.data() };
-      tasks.push(t);
-      if (t.completed) doneCount += 1;
-    });
-
-    if (statsOnly) {
-      document.getElementById('stat-tasks-count').innerText = tasks.length - doneCount;
-      document.getElementById('stat-tasks-done').innerText = doneCount;
-    } else {
-      renderTaskList(tasks);
-    }
+  let doneCount = 0;
+  data.forEach((t) => {
+    if (t.completed) doneCount += 1;
   });
+
+  if (statsOnly) {
+    document.getElementById('stat-tasks-count').innerText = data.length - doneCount;
+    document.getElementById('stat-tasks-done').innerText = doneCount;
+  } else {
+    renderTaskList(data);
+  }
+}
+
+async function subscribeToTasks(statsOnly) {
+  await refreshTasks(statsOnly);
+
+  if (tasksChannel) {
+    await supabase.removeChannel(tasksChannel);
+    tasksChannel = null;
+  }
+
+  tasksChannel = supabase
+    .channel(`tasks-${userId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${userId}` },
+      async () => {
+        await refreshTasks(statsOnly);
+      }
+    )
+    .subscribe();
 }
 
 async function addTask() {
@@ -376,29 +342,41 @@ async function addTask() {
 
   if (!desc) return alert('נא להזין תיאור');
 
-  await addDoc(tasksColRef, {
+  const { error } = await supabase.from('tasks').insert({
+    user_id: userId,
     desc,
     duration,
     type,
     recurring,
     completed: false,
-    createdAt: serverTimestamp(),
   });
+
+  if (error) {
+    alert('שגיאה בשמירת משימה');
+    return;
+  }
 
   document.getElementById('new-task-desc').value = '';
   document.getElementById('new-task-duration').value = '';
   document.getElementById('new-task-recurring').checked = false;
-  toggleAddTask(); // Close form
+  toggleAddTask();
 }
 
 async function toggleTaskDone(id, currentStatus) {
-  const taskRef = doc(tasksColRef, id);
-  await updateDoc(taskRef, { completed: !currentStatus });
+  await supabase
+    .from('tasks')
+    .update({ completed: !currentStatus })
+    .eq('id', id)
+    .eq('user_id', userId);
 }
 
 async function deleteTask(id) {
   if (!window.confirm('למחוק?')) return;
-  await deleteDoc(doc(tasksColRef, id));
+  await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userId);
 }
 
 function renderTaskList(tasks) {
@@ -448,11 +426,17 @@ async function generateSchedule(timeframe) {
   const originalText = btn.innerHTML;
   btn.innerHTML = '<span class="loading-dots">..</span>';
 
-  // Get open tasks
-  const q = query(tasksColRef, where('completed', '==', false));
-  const snapshot = await getDocs(q);
-  const tasks = [];
-  snapshot.forEach((d) => tasks.push(d.data()));
+  const { data: tasks, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('completed', false);
+
+  if (error) {
+    btn.innerHTML = originalText;
+    alert('שגיאה בשליפת משימות');
+    return;
+  }
 
   if (tasks.length === 0) {
     alert('כל המשימות הושלמו! הוסף משימות חדשות כדי לתכנן.');
@@ -500,23 +484,32 @@ async function generateSchedule(timeframe) {
 async function saveCurrentPlan() {
   const content = document.getElementById('ai-response-text').innerHTML;
   if (!content) return;
-  await addDoc(plansColRef, {
+  await supabase.from('plans').insert({
+    user_id: userId,
     html: content,
-    createdAt: serverTimestamp(),
   });
   alert('התוכנית נשמרה בהצלחה!');
 }
 
 async function loadLastPlan() {
-  const q = query(plansColRef, orderBy('createdAt', 'desc'), limit(1));
-  const snap = await getDocs(q);
-  if (snap.empty) {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('html, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    alert('שגיאה בטעינת תוכנית');
+    return;
+  }
+
+  if (!data || data.length === 0) {
     alert('לא נמצאה תוכנית שמורה');
     return;
   }
 
-  const plan = snap.docs[0].data();
-  document.getElementById('ai-response-text').innerHTML = plan.html;
+  document.getElementById('ai-response-text').innerHTML = data[0].html;
   document.getElementById('ai-response-container').classList.remove('hidden');
 }
 
@@ -525,9 +518,8 @@ function closeAIResult() {
 }
 
 async function callGeminiAPI(prompt) {
-  // Check for API Key
   if (!apiKey) {
-    alert('חסר מפתח API. אם אתה ב-GitHub, נא להוסיף אותו בקובץ ה-HTML.');
+    alert('חסר מפתח API. נא להוסיף אותו בקובץ appLogic.js.');
     return 'Error: No API Key';
   }
 
@@ -564,5 +556,5 @@ export function initApp() {
   if (appInitialized) return;
   appInitialized = true;
   registerHandlers();
-  initFirebase();
+  initSupabase();
 }

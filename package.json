@@ -4,11 +4,11 @@
   "private": true,
   "homepage": "https://yacovdroridev.github.io/chronotypePlanner",
   "dependencies": {
+    "@supabase/supabase-js": "^2.91.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^13.5.0",
-    "firebase": "^12.8.0",
     "marked": "^17.0.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
