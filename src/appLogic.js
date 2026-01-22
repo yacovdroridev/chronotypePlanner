@@ -48,7 +48,17 @@ async function handleSession(session) {
   }
 
   userId = session.user.id;
+  await ensureProfileFromMetadata(session.user);
   await checkUserProfile();
+}
+
+async function ensureProfileFromMetadata(user) {
+  const metaName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email;
+  if (!metaName) return;
+  await supabase.from('profiles').upsert(
+    { id: user.id, name: metaName },
+    { onConflict: 'id' }
+  );
 }
 
 async function checkUserProfile() {
@@ -123,6 +133,16 @@ async function handleLogin() {
   );
 
   await checkUserProfile();
+}
+
+async function loginWithProvider(provider) {
+  const basePath = window.location.pathname.includes('/chronotypePlanner') ? '/chronotypePlanner/' : '/';
+  const redirectTo = window.location.origin + basePath;
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo },
+  });
+  if (error) alert(error.message);
 }
 
 async function handleLogout() {
@@ -538,6 +558,8 @@ function registerHandlers() {
   window.goBack = goBack;
   window.handleLogout = handleLogout;
   window.handleLogin = handleLogin;
+  window.loginWithGoogle = () => loginWithProvider('google');
+  window.loginWithGithub = () => loginWithProvider('github');
   window.startQuiz = startQuiz;
   window.answer = answer;
   window.showStatusResult = showStatusResult;

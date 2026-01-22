@@ -40,6 +40,14 @@ const appMarkup = `
                 <button onclick="handleLogin()" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 transition shadow-lg">
                     התחבר / צור משתמש 🚀
                 </button>
+                <div class="mt-4 grid grid-cols-2 gap-2">
+                    <button onclick="loginWithGoogle()" class="w-full bg-white border border-gray-200 text-gray-700 text-sm py-2 rounded-lg font-bold hover:bg-gray-50">
+                        Google
+                    </button>
+                    <button onclick="loginWithGithub()" class="w-full bg-white border border-gray-200 text-gray-700 text-sm py-2 rounded-lg font-bold hover:bg-gray-50">
+                        GitHub
+                    </button>
+                </div>
             </div>
 
             <!-- Welcome Screen (Hub) -->

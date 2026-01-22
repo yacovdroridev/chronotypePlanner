@@ -23,5 +23,11 @@ npm run build
 4. (Optional) Enable Realtime for the `tasks` table.
 5. Update `src/appLogic.js` with your Supabase URL, anon key, and Gemini `apiKey`.
 
+## OAuth (Google/GitHub)
+1. In Supabase Auth settings, enable Google and GitHub providers.
+2. Add redirect URLs:
+   - `http://localhost:3000`
+   - `https://yacovdroridev.github.io/chronotypePlanner/`
+
 ## Notes
 - If you see a loading spinner, check the browser console for Firebase auth/config errors.
