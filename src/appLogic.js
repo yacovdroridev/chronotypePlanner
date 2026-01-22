@@ -41,6 +41,7 @@ let unsubscribeTasks = null; // Listener cleanup
 let appId = 'default-app-id';
 let firebaseInitTimeout = null;
 let appInitialized = false;
+let firebaseReady = false;
 
 // --- GITHUB / PUBLIC WEB CONFIGURATION ---
 // 1. If you are uploading this to GitHub, replace the Empty Strings below with your keys.
@@ -137,6 +138,7 @@ async function runFirebaseLogic() {
       userDocRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main');
       tasksColRef = collection(db, 'artifacts', appId, 'users', user.uid, 'tasks');
       plansColRef = collection(db, 'artifacts', appId, 'users', user.uid, 'plans');
+      firebaseReady = true;
 
       await checkUserProfile();
     } else {
@@ -171,6 +173,10 @@ async function checkUserProfile() {
 }
 
 async function handleLogin() {
+  if (!firebaseReady || !userDocRef) {
+    alert('ההתחברות עדיין בתהליך. נסה שוב בעוד רגע.');
+    return;
+  }
   const name = document.getElementById('username-input').value.trim();
   if (!name) return alert('נא להזין שם');
   await setDoc(userDocRef, { name }, { merge: true });
