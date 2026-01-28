@@ -26,10 +26,12 @@ This roadmap transforms the Chronotype Planner from a functional prototype into 
   1. App shows Hebrew error message instead of white screen when component crashes
   2. Login, quiz submit, task operations, and AI planning all show loading indicators
   3. Login errors and planning errors display inline in Hebrew (no alert() popups)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
+- [ ] 01-01-PLAN.md — Add error boundary to prevent white screen crashes
+- [ ] 01-02-PLAN.md — Replace LoginScreen alerts with inline errors
+- [ ] 01-03-PLAN.md — Replace planner/task alerts with inline feedback
 
 ---
 
@@ -102,7 +104,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Error Handling | 0/TBD | Not started | - |
+| 1. Error Handling | 0/3 | Planned | - |
 | 2. Auth Hardening | 0/TBD | Not started | - |
 | 3. Security | 0/TBD | Not started | - |
 | 4. Reliability | 0/TBD | Not started | - |
