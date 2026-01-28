@@ -3,10 +3,11 @@ import { CHRONOTYPES } from '../../hooks/useChronotype';
 import useTasks from '../../hooks/useTasks';
 
 const HubScreen = ({ userData, onStartQuiz }) => {
-    const { tasks, addTask, toggleTask, deleteTask } = useTasks();
+    const { tasks, addTask, toggleTask, deleteTask, error: tasksError } = useTasks();
     const [showAdd, setShowAdd] = useState(false);
     const [showTaskList, setShowTaskList] = useState(false);
     const [newTask, setNewTask] = useState({ description: '', duration: '', type: 'short', recurring: false });
+    const [taskValidationError, setTaskValidationError] = useState(null);
 
     // Re-destructure from the top level call
     const openTasks = tasks.filter(t => !t.completed).length;
@@ -14,7 +15,11 @@ const HubScreen = ({ userData, onStartQuiz }) => {
     const baseInfo = userData?.base_chronotype ? CHRONOTYPES[userData.base_chronotype] : null;
 
     const handleAddTask = async () => {
-        if (!newTask.description) return alert('Description required');
+        if (!newTask.description) {
+            setTaskValidationError('נא להזין תיאור משימה');
+            return;
+        }
+        setTaskValidationError(null);
         await addTask(newTask);
         setNewTask({ description: '', duration: '', type: 'short', recurring: false });
         setShowAdd(false);
@@ -122,6 +127,12 @@ const HubScreen = ({ userData, onStartQuiz }) => {
                                 />
                                 <label htmlFor="rec" className="text-sm text-gray-600">משימה חוזרת (הרגל)</label>
                             </div>
+
+                            {(taskValidationError || tasksError) && (
+                                <div dir="rtl" className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm mb-2" role="alert">
+                                    {taskValidationError || tasksError}
+                                </div>
+                            )}
 
                             <button onClick={handleAddTask} className="w-full bg-indigo-600 text-white text-sm py-2 rounded-lg font-bold hover:bg-indigo-700">שמור משימה</button>
                         </div>
