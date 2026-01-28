@@ -8,11 +8,46 @@
     <meta name="description" content="מבוך האנרגיה - מערכת ניהול זמן חכמה" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700&display=swap" rel="stylesheet">
     <title>מבוך האנרגיה - מערכת ניהול זמן חכמה</title>
+    
+    <!-- Suppress AbortError overlay in development -->
+    <script>
+      // Intercept errors before React's error overlay can catch them
+      window.addEventListener('error', function(event) {
+        if (event.message && event.message.includes('AbortError')) {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+          return true;
+        }
+      }, true); // Use capture phase to intercept early
+
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && (event.reason.name === 'AbortError' || 
+            (event.reason.message && event.reason.message.includes('signal is aborted')))) {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+        }
+      }, true);
+
+      // Override console.error to filter AbortError
+      (function() {
+        const originalError = console.error;
+        console.error = function(...args) {
+          const message = args[0];
+          if (message && (
+            (typeof message === 'string' && message.includes('AbortError')) ||
+            (message.message && message.message.includes('signal is aborted')) ||
+            (message.name === 'AbortError')
+          )) {
+            return; // Suppress
+          }
+          originalError.apply(console, args);
+        };
+      })();
+    </script>
   </head>
-  <body class="flex items-center justify-center min-h-screen p-4 bg-gray-100">
+  <body class="min-h-screen p-4 bg-gray-100">
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
   </body>
