@@ -1,7 +1,14 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { supabase } from '../utils/supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { withTimeout, retryWithBackoff } from '../utils/fetchWithTimeout';
+
+// Rate limiting: max 10 plans per hour
+const RATE_LIMIT = 10;
+const RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const API_TIMEOUT_MS = 30000; // 30 seconds for AI generation
 
 const usePlanner = () => {
     const { user } = useAuth();
@@ -9,15 +16,40 @@ const usePlanner = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
+    
+    // Rate limiting state
+    const generationTimestamps = useRef([]);
 
     const clearMessages = () => {
         setError(null);
         setSuccess(null);
     };
 
+    const checkRateLimit = () => {
+        const now = Date.now();
+        // Remove timestamps older than the rate window
+        generationTimestamps.current = generationTimestamps.current.filter(
+            ts => now - ts < RATE_WINDOW_MS
+        );
+        
+        if (generationTimestamps.current.length >= RATE_LIMIT) {
+            return false;
+        }
+        
+        generationTimestamps.current.push(now);
+        return true;
+    };
+
     const generateSchedule = async (timeframe, tasks, chronotype, currentMode) => {
         setError(null);
         setSuccess(null);
+        
+        // Check rate limit
+        if (!checkRateLimit()) {
+            setError('הגעת למגבלת יצירת תוכניות (10 בשעה). נסה שוב מאוחר יותר.');
+            return;
+        }
+        
         setLoading(true);
         const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
 
@@ -57,21 +89,28 @@ const usePlanner = () => {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
             const payload = { contents: [{ parts: [{ text: prompt }] }] };
 
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const data = await response.json();
-
-            if (data.error) throw new Error(data.error.message);
+            // Fetch with timeout (30s) and retry (3 attempts with exponential backoff)
+            const data = await retryWithBackoff(async () => {
+                const response = await withTimeout(
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    }),
+                    API_TIMEOUT_MS
+                );
+                const json = await response.json();
+                if (json.error) throw new Error(json.error.message);
+                return json;
+            }, 3, 1000);
 
             if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
                 throw new Error('Invalid response from AI');
             }
 
             const text = data.candidates[0].content.parts[0].text;
-            const html = marked.parse(text);
+            // Sanitize HTML to prevent XSS
+            const html = DOMPurify.sanitize(marked.parse(text));
             setPlanHtml(html);
 
         } catch (err) {

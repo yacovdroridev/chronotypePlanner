@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
@@ -6,18 +6,26 @@ const useTasks = () => {
     const { user } = useAuth();
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    
+    // Keep reference to previous tasks for rollback
+    const previousTasksRef = useRef([]);
 
     const fetchTasks = useCallback(async () => {
         if (!user) return;
         setLoading(true);
-        const { data, error } = await supabase
+        setError(null);
+        const { data, error: fetchError } = await supabase
             .from('tasks')
             .select('*')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false });
 
-        if (!error && data) {
+        if (!fetchError && data) {
             setTasks(data);
+            previousTasksRef.current = data;
+        } else if (fetchError) {
+            setError('שגיאה בטעינת משימות');
         }
         setLoading(false);
     }, [user]);
@@ -38,6 +46,7 @@ const useTasks = () => {
             )
             .subscribe();
 
+        // Proper cleanup
         return () => {
             supabase.removeChannel(channel);
         };
@@ -45,47 +54,76 @@ const useTasks = () => {
 
     const addTask = async (taskData) => {
         if (!user) return;
-        const { data, error } = await supabase.from('tasks').insert({
+        setError(null);
+        
+        // Optimistic add with temp ID
+        const tempId = `temp-${Date.now()}`;
+        const optimisticTask = {
+            id: tempId,
+            user_id: user.id,
+            completed: false,
+            created_at: new Date().toISOString(),
+            ...taskData
+        };
+        
+        setTasks(prev => {
+            previousTasksRef.current = prev;
+            return [optimisticTask, ...prev];
+        });
+
+        const { data, error: addError } = await supabase.from('tasks').insert({
             user_id: user.id,
             completed: false,
             ...taskData
         }).select().single();
 
-        if (error) {
-            alert('Error adding task: ' + error.message);
+        if (addError) {
+            // Rollback
+            setTasks(previousTasksRef.current);
+            setError('שגיאה בהוספת משימה: ' + addError.message);
         } else if (data) {
-            setTasks(prev => [data, ...prev]);
+            // Replace temp with real
+            setTasks(prev => prev.map(t => t.id === tempId ? data : t));
         }
     };
 
     const toggleTask = async (id, currentStatus) => {
-        // Optimistic update
-        setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !currentStatus } : t));
+        setError(null);
+        
+        // Save for rollback
+        setTasks(prev => {
+            previousTasksRef.current = prev;
+            return prev.map(t => t.id === id ? { ...t, completed: !currentStatus } : t);
+        });
 
-        const { error } = await supabase.from('tasks').update({ completed: !currentStatus }).eq('id', id);
-        if (error) {
-            // Revert if error
-            setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: currentStatus } : t));
-            alert('Error updating task');
+        const { error: updateError } = await supabase.from('tasks').update({ completed: !currentStatus }).eq('id', id);
+        if (updateError) {
+            // Rollback
+            setTasks(previousTasksRef.current);
+            setError('שגיאה בעדכון משימה');
         }
     };
 
     const deleteTask = async (id) => {
-        if (!window.confirm('Delete this task?')) return;
+        setError(null);
+        
+        // Save for rollback
+        setTasks(prev => {
+            previousTasksRef.current = prev;
+            return prev.filter(t => t.id !== id);
+        });
 
-        // Optimistic update
-        setTasks(prev => prev.filter(t => t.id !== id));
-
-        const { error } = await supabase.from('tasks').delete().eq('id', id);
-        if (error) {
-            // Revert (this is harder without keeping previous, but generally okay for delete)
-            // We'd ideally fetch again
-            fetchTasks();
-            alert('Error deleting task');
+        const { error: deleteError } = await supabase.from('tasks').delete().eq('id', id);
+        if (deleteError) {
+            // Rollback
+            setTasks(previousTasksRef.current);
+            setError('שגיאה במחיקת משימה');
         }
     };
 
-    return { tasks, loading, addTask, toggleTask, deleteTask };
+    const clearError = () => setError(null);
+
+    return { tasks, loading, error, addTask, toggleTask, deleteTask, clearError };
 };
 
 export default useTasks;

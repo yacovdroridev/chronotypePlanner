@@ -11,9 +11,9 @@ This roadmap transforms the Chronotype Planner from a functional prototype into 
 - Decimal phases (e.g., 2.1): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Error Handling** - Prevent white-screen crashes, add loading states, replace alerts ✅
-- [ ] **Phase 2: Auth Hardening** - Add timeout and retry to authentication flows
-- [ ] **Phase 3: Security** - Sanitize AI output (XSS prevention), add rate limiting
-- [ ] **Phase 4: Reliability** - API retry/timeout, optimistic update rollback, subscription cleanup
+- [x] **Phase 2: Auth Hardening** - Add timeout and retry to authentication flows ✅
+- [x] **Phase 3: Security** - Sanitize AI output (XSS prevention), add rate limiting ✅
+- [x] **Phase 4: Reliability** - API retry/timeout, optimistic update rollback, subscription cleanup ✅
 - [ ] **Phase 5: Verification** - Test full flows work for all timeframes, plan save/copy
 
 ## Phase Details
@@ -105,9 +105,9 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Error Handling | 3/3 | ✅ Done | 2026-01-29 |
-| 2. Auth Hardening | 0/TBD | Not started | - |
-| 3. Security | 0/TBD | Not started | - |
-| 4. Reliability | 0/TBD | Not started | - |
+| 2. Auth Hardening | 1/1 | ✅ Done | 2026-01-29 |
+| 3. Security | 1/1 | ✅ Done | 2026-01-29 |
+| 4. Reliability | 1/1 | ✅ Done | 2026-01-29 |
 | 5. Verification | 0/TBD | Not started | - |
 
 ---

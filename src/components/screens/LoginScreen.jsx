@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../../utils/supabaseClient';
+import { withTimeout } from '../../utils/fetchWithTimeout';
 
 const LoginScreen = () => {
     const [name, setName] = useState('');
@@ -18,21 +19,22 @@ const LoginScreen = () => {
         setLoading(true);
 
         try {
-            // Try to sign in first
-            const { error: signInError } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
+            // Try to sign in first (with 5s timeout)
+            const { error: signInError } = await withTimeout(
+                supabase.auth.signInWithPassword({ email, password }),
+                5000
+            );
 
             if (signInError) {
-                // If sign in fails, try to sign up
-                const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                    email,
-                    password,
-                    options: {
-                        data: { full_name: name }
-                    }
-                });
+                // If sign in fails, try to sign up (with 5s timeout)
+                const { data: signUpData, error: signUpError } = await withTimeout(
+                    supabase.auth.signUp({
+                        email,
+                        password,
+                        options: { data: { full_name: name } }
+                    }),
+                    5000
+                );
 
                 if (signUpError) {
                     setError(signUpError.message);
@@ -65,11 +67,18 @@ const LoginScreen = () => {
 
     const loginWithProvider = async (provider) => {
         setError(null);
-        const { error: oauthError } = await supabase.auth.signInWithOAuth({
-            provider,
-            options: { redirectTo: window.location.origin }
-        });
-        if (oauthError) setError(oauthError.message);
+        try {
+            const { error: oauthError } = await withTimeout(
+                supabase.auth.signInWithOAuth({
+                    provider,
+                    options: { redirectTo: window.location.origin }
+                }),
+                5000
+            );
+            if (oauthError) setError(oauthError.message);
+        } catch (err) {
+            setError(err.message);
+        }
     };
 
     return (

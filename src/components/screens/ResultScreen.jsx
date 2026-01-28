@@ -3,20 +3,20 @@ import useTasks from '../../hooks/useTasks';
 import usePlanner from '../../hooks/usePlanner';
 
 const ResultScreen = ({ resultType, resultData, onBack }) => {
-    const { tasks, addTask, toggleTask, deleteTask } = useTasks();
+    const { tasks, addTask, toggleTask, deleteTask, error: tasksError, clearError: clearTasksError } = useTasks();
     const { planHtml, loading: planLoading, error: planError, success: planSuccess, generateSchedule, savePlan, loadLastPlan, clearPlan, clearMessages } = usePlanner();
 
     const [showAdd, setShowAdd] = useState(false);
     const [newTask, setNewTask] = useState({ description: '', duration: '', type: 'short', recurring: false });
-    const [taskError, setTaskError] = useState(null);
+    const [taskValidationError, setTaskValidationError] = useState(null);
     const [copySuccess, setCopySuccess] = useState(false);
 
     const handleAddTask = async () => {
         if (!newTask.description) {
-            setTaskError('נא להזין תיאור משימה');
+            setTaskValidationError('נא להזין תיאור משימה');
             return;
         }
-        setTaskError(null);
+        setTaskValidationError(null);
         await addTask(newTask);
         setNewTask({ description: '', duration: '', type: 'short', recurring: false });
         setShowAdd(false);
@@ -79,9 +79,9 @@ const ResultScreen = ({ resultType, resultData, onBack }) => {
                             />
                             <label htmlFor="rec2" className="text-sm text-gray-600">משימה חוזרת (הרגל)</label>
                         </div>
-                        {taskError && (
+                        {(taskValidationError || tasksError) && (
                             <div dir="rtl" className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm mb-2" role="alert">
-                                {taskError}
+                                {taskValidationError || tasksError}
                             </div>
                         )}
                         <button onClick={handleAddTask} className="w-full bg-indigo-600 text-white text-sm py-2 rounded-lg font-bold hover:bg-indigo-700">שמור משימה</button>
